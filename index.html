@@ -171,6 +171,20 @@
       font-weight: 650;
     }
 
+    .demo-video {
+      overflow: hidden;
+      border: 1px solid #ddd7f2;
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 24px 60px rgba(54, 38, 105, .12);
+    }
+
+    .demo-video video {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
     /* SECTIONS */
 
     section {
@@ -389,27 +403,11 @@
         <span class="launch-note">First public release in preparation.</span>
       </div>
 
-      <div class="mockup">
-        <div class="mockup-title">Add variable product</div>
-
-        <div class="field">
-          <label>Product</label>
-          <div class="select">Classic T-Shirt</div>
-        </div>
-
-        <div class="field">
-          <label>Color</label>
-          <div class="select">Navy</div>
-        </div>
-
-        <div class="field">
-          <label>Size</label>
-          <div class="select">Medium</div>
-        </div>
-
-        <div class="match">✓ Matching variation found</div>
-
-        <div class="mock-button">Add to order</div>
+      <div class="demo-video">
+        <video autoplay muted loop playsinline controls>
+          <source src="manual-order-variation-picker-demo.mp4" type="video/mp4">
+          Your browser does not support the video tag.
+        </video>
       </div>
 
     </div>
