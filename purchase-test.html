@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://dbqilazxxsnskbgbrxdv.supabase.co; base-uri 'none'; form-action 'none'; object-src 'none'">
+<title>MOVP — Test purchase</title>
+<style>body{font:17px/1.6 system-ui;margin:3rem auto;padding:0 1rem;max-width:44rem;color:#18202a}label{display:block}input{box-sizing:border-box;width:100%;padding:.7rem;margin:.3rem 0 1rem}button{font:inherit;padding:.65rem 1rem;margin:.3rem .3rem .3rem 0;cursor:pointer}button:disabled{cursor:wait}#status{white-space:pre-wrap;overflow-wrap:anywhere}aside{background:#fff3ce;padding:1rem}code{overflow-wrap:anywhere}section{margin-top:2rem}</style>
+<h1>Manual Order Variation Picker</h1>
+<aside><strong>TEST ENVIRONMENT — no real purchase.</strong><br>USD 29 once. No subscription or automatic renewal. Use Stripe test payment details only.</aside>
+<p>This test checks payment verification, license issuance and private delivery. One license covers one production site and one related staging/test site, with 365 days of updates/support. The installed plugin keeps working after expiry or an API outage.</p>
+<label for="email">Test customer email</label><input id="email" type="email" autocomplete="email" required>
+<button id="buy">Open $29 test Checkout</button>
+<button id="check">Check purchase</button>
+<p id="status" role="status" aria-live="polite">Ready for testing.</p>
+<section id="delivery" hidden>
+ <h2>Your test license</h2>
+ <label for="key">Copy and save your license key</label><input id="key" readonly autocomplete="off">
+ <p>The key is stored in this tab's session only. Save it before closing the tab. License recovery is handled manually during this test phase.</p>
+ <button id="download">Get private plugin download</button>
+ <p>Install the ZIP in WordPress, then open WooCommerce → MOVP License to activate. WordPress Multisite is not supported.</p>
+</section>
+<script>
+'use strict';
+const API='https://dbqilazxxsnskbgbrxdv.supabase.co/functions/v1/';
+const $=id=>document.getElementById(id);
+let key=sessionStorage.getItem('oaz_movp_test_key')||'';
+$('email').value=sessionStorage.getItem('oaz_movp_test_email')||'';
+async function request(path,body,authenticated=false){
+ const headers={'Content-Type':'application/json'};
+ if(authenticated)headers.Authorization='Bearer '+key;
+ const r=await fetch(API+path,{method:'POST',headers,body:JSON.stringify(body),cache:'no-store',referrerPolicy:'no-referrer'});
+ const data=await r.json();
+ if(!r.ok)throw new Error(data.error||'Service temporarily unavailable. Please retry.');
+ return data;
+}
+async function check(){
+ if(!key){$('status').textContent='Start a test Checkout first.';return;}
+ const data=await request('oaz-license',{operation:'status'},true);
+ if(data.state!=='issued'){$('status').textContent='Payment verification is pending. Check again shortly.';return;}
+ $('status').textContent='Payment verified. License issued. Updates/support until: '+data.access.updates_until;
+ $('key').value=key;$('delivery').hidden=false;
+}
+for(const id of ['buy','check','download'])$(id).addEventListener('click',async()=>{
+ const button=$(id);button.disabled=true;
+ try{
+  if(id==='buy'){
+   if(!$('email').reportValidity())return;
+   if(!key){key='OAZ-'+Array.from(crypto.getRandomValues(new Uint8Array(32)),b=>b.toString(16).padStart(2,'0')).join('');sessionStorage.setItem('oaz_movp_test_key',key);}
+   sessionStorage.setItem('oaz_movp_test_email',$('email').value.trim());
+   const data=await request('oaz-checkout',{email:$('email').value.trim(),license_key:key});
+   const url=new URL(data.url);if(url.origin!=='https://checkout.stripe.com')throw new Error('Unexpected checkout URL');
+   location.assign(url.href);
+  }else if(id==='check'){await check();}
+  else{
+   const data=await request('oaz-license',{operation:'download'},true);
+   const url=new URL(data.url);if(url.origin!=='https://dbqilazxxsnskbgbrxdv.supabase.co'||!url.pathname.startsWith('/storage/v1/object/sign/'))throw new Error('Unexpected download URL');
+   $('status').textContent='Private download authorized for version '+data.version+'. The link expires in 60 seconds.';
+   location.assign(url.href);
+  }
+ }catch(e){$('status').textContent=e.message;}finally{button.disabled=false;}
+});
+if(new URLSearchParams(location.search).get('result')==='success')check().catch(e=>$('status').textContent=e.message);
+</script>
+</html>
