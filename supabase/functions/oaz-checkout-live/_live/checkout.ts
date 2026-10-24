@@ -50,18 +50,22 @@ function billing(body:Record<string,any>){
 export function checkoutHandler(rpc:RPC,getStripe:()=>any,accountCheck:(stripe:any)=>Promise<void>,launchToken:string){
 return async(req:Request):Promise<Response>=>{
  if(req.method==='OPTIONS')return json({});
- if(req.method==='POST'&&!await validLaunchToken(req.headers.get('authorization'),launchToken))return json({error:'live_sales_closed'},403);
  try{
   if(req.method==='GET'){
    const gate=await rpc('oaz_live_gate_status',{});let configured=false;
    try{const stripe=getStripe();await accountCheck(stripe);const [price,product]=await Promise.all([stripe.prices.retrieve(LIVE.price),stripe.products.retrieve(LIVE.product)]);configured=validCatalog(price,product);}catch{}
-   return json({public_sales_enabled:false,stripe_live_configured:configured,controlled_checkout_enabled:gate?.controlled_checkout_enabled===true,tax_review_complete:gate?.tax_review_complete===true,customer_flow_ready:gate?.customer_flow_ready===true,owner_token_configured:/^[0-9a-f]{64}$/.test(launchToken)});
+   return json({public_sales_enabled:gate?.public_sales_enabled===true,stripe_live_configured:configured,controlled_checkout_enabled:gate?.controlled_checkout_enabled===true,tax_review_complete:gate?.tax_review_complete===true,customer_flow_ready:gate?.customer_flow_ready===true,owner_token_configured:/^[0-9a-f]{64}$/.test(launchToken)});
   }
   if(req.method!=='POST')return json({error:'post_required'},405);
-  await limit(rpc,'checkout-live-global',10);
-  const gate=await rpc('oaz_live_gate_status',{});
-  if(!gate?.controlled_checkout_enabled||!gate.tax_review_complete||!gate.customer_flow_ready)return json({error:'live_launch_gate_closed'},403);
 
+  const gate=await rpc('oaz_live_gate_status',{});
+  const commonReady=gate?.tax_review_complete===true&&gate?.customer_flow_ready===true;
+  const publicAllowed=commonReady&&gate?.public_sales_enabled===true;
+  const ownerAuthorized=await validLaunchToken(req.headers.get('authorization'),launchToken);
+  const controlledAllowed=commonReady&&gate?.controlled_checkout_enabled===true&&ownerAuthorized;
+  if(!publicAllowed&&!controlledAllowed)return json({error:'live_sales_closed'},403);
+
+  await limit(rpc,'checkout-live-global',10);
   const body=await readJSON(req),key=licenseKey(body.license_key);
   if(typeof body.email!=='string'||body.email.length>254||!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(body.email))throw new Rejected('valid_email_required');
   const allowed=['email','license_key','buyer_type','billing_name','billing_country','billing_line1','billing_line2','billing_city','billing_postal_code','billing_state','business_name','tax_vat_id'];
